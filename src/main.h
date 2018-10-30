@@ -353,7 +353,7 @@ public:
 };
 
 
-
+ 
 
 //
 // The basic transaction that is broadcasted on the network and contained in
@@ -688,7 +688,7 @@ public:
 class CWalletTx : public CMerkleTx
 {
 public:
-    vector<CMerkleTx> vtxPrev; // 当前交易A对应的输入对应的交易B，如果B所在block到最长链末尾的长度小于3，则将次交易放入
+    vector<CMerkleTx> vtxPrev; // 根据 交易的历史 不断回溯，只要最近3代的就算是 有关
     /*
 	主要用于存放一下自定义的值
 	wtx.mapValue["to"] = strAddress;
