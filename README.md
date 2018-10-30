@@ -1,6 +1,13 @@
-# bitcoin-comment-0.1.0
+# 添加详细注释
 
-## 参考文档：
+* main.cpp
+* main.h
+
+# 原作者：
+
+## bitcoin-comment-0.1.0
+
+参考文档：
 
 * https://www.jianshu.com/p/d01e4c58eb11
 
