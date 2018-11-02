@@ -14,7 +14,7 @@ CCriticalSection cs_main;
 map<uint256, CTransaction> mapTransactions; // 如果交易对应的区块已经放入主链中，则将从内存上删除这些放入区块中的交易，也就是说这里面仅仅保存没有被打包到主链中交易
 CCriticalSection cs_mapTransactions;
 unsigned int nTransactionsUpdated = 0; // 每次对mapTransactions中交易进行更新，都对该字段进行++操作
-map<COutPoint, CInPoint> mapNextTx;    // 如果对应的区块已经放入到主链中，则对应的区块交易应该要从本节点保存的交易内存池中删除
+map<COutPoint, CInPoint> mapNextTx;    // 就是 两个交易的 边 ！ 从 OUT 指向 IN
 
 map<uint256, CBlockIndex *> mapBlockIndex; // 块索引信息：其中key对应的block的hash值
 const uint256 hashGenesisBlock("0x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f");
@@ -391,7 +391,11 @@ void CWalletTx::AddSupportingTransactions(CTxDB &txdb)
 // 第二个参数 判断 是否在 DB中查找
 // 第三个参数 一开始 设置为 false
 //  bool AcceptTransaction(CTxDB& txdb, bool fCheckInputs=true, bool* pfMissingInputs=NULL);
-
+// 1.判断是否是 coinbase 格式判断CheckTransaction
+// 2.判断交易是否之前已经收到了，内存 or 数据库
+// 3.判断是否和已经存在的冲突，存在的话，如果完全覆盖，那么更新
+// 4.ConnectInputs 将OUT标记
+// 5.AddToMemoryPool， 其中会更新mapNextTx 存起来mapTransactions 和 mapWallet
 bool CTransaction::AcceptTransaction(CTxDB &txdb, bool fCheckInputs, bool *pfMissingInputs)
 {
 
@@ -554,6 +558,10 @@ int CMerkleTx::GetBlocksToMaturity() const
     return max(0, (COINBASE_MATURITY + 20) - GetDepthInMainChain());
 }
 
+
+// CmerkleTX 判断是否可以接受 transaction
+// 客户端 判断是否在主链上，然后挨个判断签名
+// accept ， 如果是客户端，那么 不需要 1.判断DB是否存在 2.不需要 交易连入ConnectInputs？？
 bool CMerkleTx::AcceptTransaction(CTxDB &txdb, bool fCheckInputs)
 {
     if (fClient)
@@ -569,9 +577,9 @@ bool CMerkleTx::AcceptTransaction(CTxDB &txdb, bool fCheckInputs)
 }
 
 // 判断当前交易是否能够被接收
-// 先对于 这个交易 的支持交易 进行 接受判断 是否 已经存在于 mapTransaction 中
-// 已经存在的就不检查了
-// 在最长链， 客户端连接输入，对交易本身进行验证
+// 先对于 这个交易 的支持交易 进行 接受判断
+// 是否 已经存在于 mapTransaction 中已经存在的就不检查了
+// 不在的话， 那就 merkle.accept,fCheckInputs所有用的DB的地方都是false
 bool CWalletTx::AcceptWalletTransaction(CTxDB &txdb, bool fCheckInputs)
 {
     CRITICAL_BLOCK(cs_mapTransactions)
@@ -607,6 +615,7 @@ void ReacceptWalletTransactions()
 }
 
 // 钱包交易进行转播
+// 将支持当前交易的交易进行广播，relayMessage
 void CWalletTx::RelayWalletTransaction(CTxDB &txdb)
 {
     // 对于那些交易所在block到最长链的block之间的距离小于3的需要对这些交易进行转播
@@ -786,6 +795,7 @@ bool CTransaction::DisconnectInputs(CTxDB &txdb)
 }
 
 // 交易输入链接，将对应的交易输入占用对应的交易输入的花费标记
+// CDiskTxPos posThisTx 为什么传进去个 1,1,1？？？？？？？？？？？
 bool CTransaction::ConnectInputs(CTxDB &txdb, map<uint256, CTxIndex> &mapTestPool, CDiskTxPos posThisTx, int nHeight, int64 &nFees, bool fBlock, bool fMiner, int64 nMinFee)
 {
     // 占用前一个交易对应的花费指针
@@ -926,6 +936,7 @@ bool CTransaction::ClientConnectInputs()
 
             nValueIn += txPrev.vout[prevout.n].nValue;
         }
+        // 钱多了就没关系吗？？？？
         if (GetValueOut() > nValueIn)
             return false;
     }
